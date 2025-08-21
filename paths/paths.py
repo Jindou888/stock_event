@@ -5,6 +5,7 @@
 
 from os.path import join
 
+clean_data_path = '/nas/data/data_cn/data_clean'
 process_data_path = '/nas/data/data_cn/data_process'
 stock_daily_info_path = join(process_data_path, 'daily_info')
 stock_exit_info_path = join(process_data_path, 'exit_info')
