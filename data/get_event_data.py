@@ -43,7 +43,8 @@ def get_data2(date: str, code: str):
 
 def merge_occur_quote(event: pd.DataFrame, quote: pd.DataFrame) -> pd.DataFrame:
 	for idx, row in event.iterrows():
-		quote_real = quote[quote.time.ge(row.serverTime + 50)].head(1)
+		time, serverTime = time_to_milliseconds(quote.time), time_to_milliseconds(row.serverTime) + 50
+		quote_real = quote[time >= serverTime].head(1)
 		if quote_real.empty or quote_real.bizIndex.iloc[0] <= row.bizIndex:
 			continue
 		event.loc[idx, quote.columns[4:]] = quote_real[quote.columns[4:]].values[0]
