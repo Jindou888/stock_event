@@ -119,7 +119,7 @@ def get_event_data1(date: str):
 # 	return
 
 
-def generate_label(date: str):
+def get_label(date: str):
 	exit_index = pd.read_parquet(join(stock_exit_info_path, date, 'exit_index.parquet'))
 	exit_index = exit_index.index240.to_dict()
 	exit_price = pd.read_parquet(join(stock_exit_info_path, date, 'exit_price1.parquet'))
@@ -140,4 +140,4 @@ if __name__ == '__main__':
 		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
 	]
 	# perform_batch_task(get_event_data1, trading_dates, n_worker=6)
-	perform_batch_task(generate_label, trading_dates[:-1], n_worker=6)
+	perform_batch_task(get_label, trading_dates[:-1], n_worker=6)
