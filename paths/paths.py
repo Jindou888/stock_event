@@ -17,3 +17,4 @@ event_path = '/nas/data/stock_event'
 dataset_path = join(event_path, 'dataset')
 event_data_path = join(event_path, 'event_data')
 event_info_path = join(event_path, 'event_info')
+feature_path = join(event_path, 'feature')
