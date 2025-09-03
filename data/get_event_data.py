@@ -62,15 +62,11 @@ def get_event_data1(date: str):
 			return
 		df1 = trans[trans.price.eq(trans.price.cummax())].groupby('price').first().reset_index(drop=True)
 		df1['orderNo'] = np.where(df1.bidNo > df1.askNo, df1.bidNo, df1.askNo)
-		
 		df2 = order[order.orderNo.isin(df1.orderNo)]
 		df1.bizIndex = df1.orderNo.map(df2.set_index('orderNo').bizIndex.to_dict())
-		
 		last_time = milliseconds_to_time(time_to_milliseconds(df1.serverTime) // 3e3 * 3e3)
 		df1['last_time'] = pd.to_datetime(int(date) * 1e9 + last_time, format='%Y%m%d%H%M%S%f')
-		
 		df1 = merge_occur_quote(df1, quote)
-		
 		cond1 = df1.time.ge(93001000) & df1.time.lt(113000000)
 		cond2 = df1.time.ge(130000000) & df1.time.lt(140000000)
 		cond3 = df1.serverTime.lt(145700000)
