@@ -8,15 +8,13 @@ sys.path.extend(['/home/kfu/stock_event/'])
 import numpy as np
 import pandas as pd
 from os.path import join
-from tqdm import tqdm
-from typing import List
-from paths.paths import clean_data_path, event_data_path, feature_path, stock_split_data_path
+from paths.paths import event_data_path, feature_path, stock_resample_path, stock_split_data_path
 from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds
 from research_utils import get_quote_additional_columns
 
 
 def read_event_data1(date: str):
-	columns = ['code', 'serverTime', 'bizIndex']
+	columns = ['code', 'bizIndex', 'serverTime', 'datetime']
 	df = pd.read_parquet(join(event_data_path, date, 'event_data1.parquet'), columns=columns)
 	df = df.drop_duplicates(['code', 'bizIndex']).sort_values(['code', 'bizIndex'], ignore_index=True)
 	return df
@@ -26,14 +24,15 @@ def get_section_feature(date: str):
 	def get_section_feature_by_code(t):
 		code, df = t
 		columns = [
-			'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow', 'cumVolume',
-			'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4', 'bidPx5', 'bidPx6', 'bidPx7',
-			'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2', 'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6',
-			'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10', 'bidNum1', 'bidNum2', 'bidNum3', 'bidNum4', 'bidNum5',
-			'bidNum6', 'bidNum7', 'bidNum8', 'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4',
-			'askPx5', 'askPx6', 'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2', 'askVol3',
-			'askVol4', 'askVol5', 'askVol6', 'askVol7', 'askVol8', 'askVol9', 'askVol10', 'askNum1', 'askNum2',
-			'askNum3', 'askNum4', 'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
+			'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow',
+			'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4',
+			'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2',
+			'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6', 'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10',
+			'bidNum1', 'bidNum2', 'bidNum3', 'bidNum4', 'bidNum5', 'bidNum6',  'bidNum7', 'bidNum8',
+			'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5', 'askPx6',
+			'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2',  'askVol3', 'askVol4',
+			'askVol5', 'askVol6', 'askVol7', 'askVol8', 'askVol9', 'askVol10',  'askNum1', 'askNum2',
+			'askNum3', 'askNum4', 'askNum5', 'askNum6', 'askNum7', 'askNum8',  'askNum9', 'askNum10',
 			'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum', 'totalAskNum',
 		]
 		df1 = pd.read_parquet(join(stock_split_data_path, date, str(code), 'quotes.parquet'), columns=columns)
@@ -57,6 +56,9 @@ def get_section_feature(date: str):
 		df['imb12'] = df1.bidNum1 / df1.totalBidNum5 - df1.askNum1 / df1.totalAskNum5
 		df['imb13'] = df1.totalBidNum5 / df1.totalBidNum10 - df1.totalAskNum5 / df1.totalAskNum10
 		df['imb14'] = df1.totalBidNum10 / df1.totalBidNum - df1.totalAskNum10 / df1.totalAskNum
+		x1 = df1.totalBidVol10 / df1.totalBidNum10
+		x2 = df1.totalAskVol10 / df1.totalAskNum10
+		df['imb15'] = (x1 - x2) / (x1 + x2)
 		
 		df['gap1'] = (df1.midPx - df1.avgBidPx5) / df1.midPx
 		df['gap2'] = (df1.avgAskPx5 - df1.midPx) / df1.midPx
@@ -87,13 +89,53 @@ def get_section_feature(date: str):
 	
 	event = read_event_data1(date)
 	event.serverTime = time_to_milliseconds(event.serverTime)
-	feature = pd.concat(list(map(get_section_feature_by_code, tqdm(event.groupby('code')))))
-	feature = feature.reset_index().set_index(['code', 'bizIndex']).drop(['serverTime'], axis=1)
+	feature = pd.concat(list(map(get_section_feature_by_code, event.groupby('code'))))
+	feature = feature.reset_index().set_index(['code', 'bizIndex']).drop(['serverTime', 'datetime'], axis=1)
 	feature = feature.astype('float64').replace([np.inf, -np.inf], np.nan)
 	feature.to_parquet(join(feature_path, date, 'feature_section.parquet'))
 
 
-def get_series_feature():
+def get_series_feature(date: str):
+	columns = [
+		'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow',
+		'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4',
+		'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2',
+		'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6', 'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10',
+		'bidNum1', 'bidNum2', 'bidNum3', 'bidNum4', 'bidNum5', 'bidNum6', 'bidNum7', 'bidNum8',
+		'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5', 'askPx6',
+		'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2', 'askVol3', 'askVol4',
+		'askVol5', 'askVol6', 'askVol7', 'askVol8', 'askVol9', 'askVol10', 'askNum1', 'askNum2',
+		'askNum3', 'askNum4', 'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
+		'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum', 'totalAskNum',
+	]
+	df1 = pd.read_parquet(join(stock_resample_path, date, 'quote.parquet'), columns=columns)
+	# df1 = get_quote_additional_columns(df1)
+	
+	aa = ['bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow',
+       'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3',
+       'bidPx4', 'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10',
+       'bidVol1', 'bidVol2', 'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6',
+       'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10', 'bidNum1', 'bidNum2',
+       'bidNum3', 'bidNum4', 'bidNum5', 'bidNum6', 'bidNum7', 'bidNum8',
+       'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5',
+       'askPx6', 'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2',
+       'askVol3', 'askVol4', 'askVol5', 'askVol6', 'askVol7', 'askVol8',
+       'askVol9', 'askVol10', 'askNum1', 'askNum2', 'askNum3', 'askNum4',
+       'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
+       'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum',
+       'totalAskNum', 'totalBidVol5', 'totalAskVol5', 'totalBidNum5',
+       'totalAskNum5', 'totalBidVol10', 'totalAskVol10', 'totalBidNum10',
+       'totalAskNum10', 'avgBidPx5', 'avgAskPx5', 'avgBidPx10', 'avgAskPx10',
+       'volume', 'amount', 'number', 'midPx']
+	
+	df2 = df1[['bidVol1', 'askVol1', 'totalBidVol', 'totalAskVol', 'midPx']].unstack(level=0)
+	
+	x3 = df2['bidVol1'].rolling(200, min_periods=1).sum()
+	x4 = df2['askVol1'].rolling(200, min_periods=1).sum()
+	((x3 - x4) / (x3 + x4)).rolling(200, min_periods=1).sum().T.stack(future_stack=True)
+	
+	df = read_event_data1(date)
+	df.serverTime = time_to_milliseconds(df.serverTime)
 	return
 
 
@@ -143,8 +185,9 @@ def get_trans_feature(date: str):
 	
 	df = read_event_data1(date)
 	df.serverTime = time_to_milliseconds(df.serverTime)
-	df = pd.concat(list(map(get_trans_feature_by_code, tqdm(df.groupby('code')))))
-	df = df.set_index(['code', 'bizIndex']).drop(['serverTime'], axis=1).replace([np.inf, -np.inf], np.nan)
+	df = pd.concat(list(map(get_trans_feature_by_code, df.groupby('code'))))
+	df = df.set_index(['code', 'bizIndex']).drop(['serverTime', 'datetime'], axis=1)
+	df = df.astype('float64').replace([np.inf, -np.inf], np.nan)
 	df.to_parquet(join(feature_path, date, 'feature_trans.parquet'))
 
 
@@ -231,8 +274,9 @@ def get_order_feature(date: str):
 	
 	df = read_event_data1(date)
 	df.serverTime = time_to_milliseconds(df.serverTime)
-	df = pd.concat(list(map(get_order_feature_by_code, tqdm(df.groupby('code')))))
-	df = df.set_index(['code', 'bizIndex']).drop(['serverTime'], axis=1).replace([np.inf, -np.inf], np.nan)
+	df = pd.concat(list(map(get_order_feature_by_code, df.groupby('code'))))
+	df = df.set_index(['code', 'bizIndex']).drop(['serverTime', 'datetime'], axis=1)
+	df = df.astype('float64').replace([np.inf, -np.inf], np.nan)
 	df.to_parquet(join(feature_path, date, 'feature_order.parquet'))
 
 
@@ -247,4 +291,3 @@ if __name__ == '__main__':
 	# perform_batch_task(get_trans_feature, trading_dates, n_worker=6)
 	# perform_batch_task(get_order_feature, trading_dates, n_worker=6)
 	date = '20250116'
-	code = '000001.SZ'
