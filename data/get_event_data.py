@@ -10,7 +10,7 @@ import pandas as pd
 from os import makedirs
 from os.path import join
 from typing import List
-from paths.paths import clean_data_path, event_info_path, event_data_path, stock_exit_info_path, stock_split_data_path
+from paths.paths import clean_data_path, event_data_path, stock_exit_info_path, stock_split_data_path
 from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds
 
 
@@ -37,10 +37,6 @@ def get_data1(date: str, code: str):
 	return trans, order, quote
 
 
-def get_data2(date: str, code: str):
-	return
-
-
 def merge_occur_quote(event: pd.DataFrame, quote: pd.DataFrame) -> pd.DataFrame:
 	for idx, row in event.iterrows():
 		time, serverTime = time_to_milliseconds(quote.time), time_to_milliseconds(row.serverTime) + 50
@@ -64,8 +60,8 @@ def get_event_data1(date: str):
 		df1['orderNo'] = np.where(df1.bidNo > df1.askNo, df1.bidNo, df1.askNo)
 		df2 = order[order.orderNo.isin(df1.orderNo)]
 		df1.bizIndex = df1.orderNo.map(df2.set_index('orderNo').bizIndex.to_dict())
-		last_time = milliseconds_to_time(time_to_milliseconds(df1.serverTime) // 3e3 * 3e3)
-		df1['last_time'] = pd.to_datetime(int(date) * 1e9 + last_time, format='%Y%m%d%H%M%S%f')
+		datetime = milliseconds_to_time(time_to_milliseconds(df1.serverTime) // 3e3 * 3e3)
+		df1['datetime'] = pd.to_datetime(int(date) * 1e9 + datetime, format='%Y%m%d%H%M%S%f')
 		df1 = merge_occur_quote(df1, quote)
 		cond1 = df1.time.ge(93001000) & df1.time.lt(113000000)
 		cond2 = df1.time.ge(130000000) & df1.time.lt(140000000)
@@ -124,16 +120,16 @@ def get_label(date: str):
 	df = pd.read_parquet(join(event_data_path, date, 'event_data1.parquet'))
 	df['exit_price'] = df.code.map(exit_price)
 	midpx = (df.best_bid.fillna(df.best_ask) + df.best_ask.fillna(df.best_bid)) / 2
-	df['y_true'] = (df.exit_price / midpx - 1) * 1e4 - df.last_time.map(exit_index)
+	df['y_true'] = (df.exit_price / midpx - 1) * 1e4 - df.datetime.map(exit_index)
 	df.to_parquet(join(event_data_path, date, 'label1.parquet'))
 
 
 if __name__ == '__main__':
 	trading_dates = [
-		'20250103', '20250106', '20250107', '20250108', '20250109', '20250110', '20250113', '20250114',
+		'20250102', '20250103', '20250106', '20250107', '20250108', '20250109', '20250110', '20250113', '20250114',
 		'20250115', '20250116', '20250117', '20250120', '20250121', '20250122', '20250123', '20250124', '20250127',
 		'20250205', '20250206', '20250207', '20250210', '20250211', '20250212', '20250213', '20250214', '20250217',
 		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
 	]
-	# perform_batch_task(get_event_data1, trading_dates, n_worker=6)
+	perform_batch_task(get_event_data1, trading_dates[1:], n_worker=6)
 	perform_batch_task(get_label, trading_dates[:-1], n_worker=6)
