@@ -7,6 +7,7 @@ import sys
 sys.path.extend(['/home/kfu/stock_event/'])
 import numpy as np
 import pandas as pd
+from os import makedirs
 from os.path import join
 from typing import Dict
 import warnings
@@ -166,6 +167,7 @@ def get_auction_feature(date: str):
 	df['pos_bid_num_prop_bp10'] = group2.bid_number.sum() / total_bid_order_number
 	
 	df = df.astype('float64').replace([np.inf, -np.inf], np.nan)
+	makedirs(join(feature_path, date), exist_ok=True)
 	df.to_parquet(join(feature_path, date, 'feature_auction.parquet'))
 
 
