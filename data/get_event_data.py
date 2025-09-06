@@ -132,4 +132,4 @@ if __name__ == '__main__':
 		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
 	]
 	perform_batch_task(get_event_data1, trading_dates[1:], n_worker=6)
-	perform_batch_task(get_label, trading_dates[:-1], n_worker=6)
+	perform_batch_task(get_label, trading_dates[1:-1], n_worker=6)
