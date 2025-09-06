@@ -8,7 +8,6 @@ sys.path.extend(['/home/kfu/stock_event/'])
 import numpy as np
 import pandas as pd
 from os.path import join
-from tqdm import tqdm
 from typing import Dict
 import warnings
 from paths.paths import clean_data_path, feature_path, stock_raw_data_path
@@ -47,7 +46,7 @@ def get_open_price(order: pd.DataFrame, cancel: pd.DataFrame, preclose: Dict):
 		df = df[['price', 'match_volume', 'bid_cum_volume', 'ask_cum_volume']]
 		return df
 	
-	result = pd.concat(list(map(get_open_price_by, tqdm(order.bins.unique())))).sort_index()
+	result = pd.concat(list(map(get_open_price_by, order.bins.unique()))).sort_index()
 	return result
 
 
@@ -171,4 +170,10 @@ def get_auction_feature(date: str):
 
 
 if __name__ == '__main__':
-	date = '20250116'
+	trading_dates = [
+		'20250102', '20250103', '20250106', '20250107', '20250108', '20250109', '20250110', '20250113', '20250114',
+		'20250115', '20250116', '20250117', '20250120', '20250121', '20250122', '20250123', '20250124', '20250127',
+		'20250205', '20250206', '20250207', '20250210', '20250211', '20250212', '20250213', '20250214', '20250217',
+		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
+	]
+	perform_batch_task(get_auction_feature, trading_dates, n_worker=6)
