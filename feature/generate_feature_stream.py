@@ -7,12 +7,12 @@ import sys
 sys.path.extend(['/home/kfu/stock_event/'])
 import numpy as np
 import pandas as pd
-from os import makedirs
 from os.path import join
 from tqdm import tqdm
 from typing import List
 from paths.paths import clean_data_path, event_data_path, feature_path, stock_split_data_path
 from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds
+from research_utils import get_quote_additional_columns
 
 
 def read_event_data1(date: str):
@@ -24,35 +24,73 @@ def read_event_data1(date: str):
 
 def get_section_feature(date: str):
 	def get_section_feature_by_code(t):
-		code, event = t
+		code, df = t
 		columns = [
-			'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'lastPx', 'limitHigh', 'limitLow',
-			'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4',
-			'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1',
-			'bidVol2', 'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6', 'bidVol7',
-			'bidVol8', 'bidVol9', 'bidVol10', 'bidNum1', 'bidNum2', 'bidNum3',
-			'bidNum4', 'bidNum5', 'bidNum6', 'bidNum7', 'bidNum8', 'bidNum9',
-			'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5', 'askPx6',
-			'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2',
-			'askVol3', 'askVol4', 'askVol5', 'askVol6', 'askVol7', 'askVol8',
-			'askVol9', 'askVol10', 'askNum1', 'askNum2', 'askNum3', 'askNum4',
-			'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
+			'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow', 'cumVolume',
+			'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4', 'bidPx5', 'bidPx6', 'bidPx7',
+			'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2', 'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6',
+			'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10', 'bidNum1', 'bidNum2', 'bidNum3', 'bidNum4', 'bidNum5',
+			'bidNum6', 'bidNum7', 'bidNum8', 'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4',
+			'askPx5', 'askPx6', 'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2', 'askVol3',
+			'askVol4', 'askVol5', 'askVol6', 'askVol7', 'askVol8', 'askVol9', 'askVol10', 'askNum1', 'askNum2',
+			'askNum3', 'askNum4', 'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
 			'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum', 'totalAskNum',
 		]
-		quote = pd.read_parquet(join(stock_split_data_path, date, str(code), 'quotes.parquet'), columns=columns)
-		quote = quote[quote.bizIndex.isin(event.bizIndex)]
+		df1 = pd.read_parquet(join(stock_split_data_path, date, str(code), 'quotes.parquet'), columns=columns)
+		df1 = df1[df1.bizIndex.isin(df.bizIndex)].set_index('bizIndex')
+		df1 = get_quote_additional_columns(df1)
+		df1.loc[df1.limitLow.le(0.02), ['limitHigh', 'limitLow', 'avgBidPx', 'avgAskPx']] = np.nan
 		
-		amount1, amount10 = np.nan, np.nan
+		df = df.set_index('bizIndex')
+		df['midPx'] = df1.midPx
+		df['imb1'] = (df1.bidVol1 - df1.askVol1) / (df1.bidVol1 + df1.askVol1)
+		df['imb2'] = (df1.totalBidVol5 - df1.totalAskVol5) / (df1.totalBidVol5 + df1.totalAskVol5)
+		df['imb3'] = (df1.totalBidVol10 - df1.totalAskVol10) / (df1.totalBidVol10 + df1.totalAskVol10)
+		df['imb4'] = (df1.totalBidVol - df1.totalAskVol) / (df1.totalBidVol + df1.totalAskVol)
+		df['imb5'] = (df1.bidNum1 - df1.askNum1) / (df1.bidNum1 + df1.askNum1)
+		df['imb6'] = (df1.totalBidNum5 - df1.totalAskNum5) / (df1.totalBidNum5 + df1.totalAskNum5)
+		df['imb7'] = (df1.totalBidNum10 - df1.totalAskNum10) / (df1.totalBidNum10 + df1.totalAskNum10)
+		df['imb8'] = (df1.totalBidNum - df1.totalAskNum) / (df1.totalBidNum + df1.totalAskNum)
+		df['imb9'] = df1.bidVol1 / df1.totalBidVol5 - df1.askVol1 / df1.totalAskVol5
+		df['imb10'] = df1.totalBidVol5 / df1.totalBidVol10 - df1.totalAskVol5 / df1.totalAskVol10
+		df['imb11'] = df1.totalBidVol10 / df1.totalBidVol - df1.totalAskVol10 / df1.totalAskVol
+		df['imb12'] = df1.bidNum1 / df1.totalBidNum5 - df1.askNum1 / df1.totalAskNum5
+		df['imb13'] = df1.totalBidNum5 / df1.totalBidNum10 - df1.totalAskNum5 / df1.totalAskNum10
+		df['imb14'] = df1.totalBidNum10 / df1.totalBidNum - df1.totalAskNum10 / df1.totalAskNum
 		
-		# feature
-		return quote
+		df['gap1'] = (df1.midPx - df1.avgBidPx5) / df1.midPx
+		df['gap2'] = (df1.avgAskPx5 - df1.midPx) / df1.midPx
+		df['gap3'] = (df1.midPx - df1.avgBidPx10) / df1.midPx
+		df['gap4'] = (df1.avgAskPx10 - df1.midPx) / df1.midPx
+		df['gap5'] = (df1.midPx - df1.avgBidPx) / df1.midPx
+		df['gap6'] = (df1.avgAskPx - df1.midPx) / df1.midPx
+		df['gap7'] = df.gap1 - df.gap2
+		df['gap8'] = df.gap3 - df.gap4
+		df['gap9'] = df.gap5 - df.gap6
+		df['gap10'] = df.gap1 / df.gap3
+		df['gap11'] = df.gap2 / df.gap4
+		df['gap12'] = df.gap3 / df.gap5
+		df['gap13'] = df.gap4 / df.gap6
+		
+		df['ret1'] = (df1.midPx - df1.open) / df1.midPx
+		df['ret2'] = (df1.midPx - df1.preClose) / df1.midPx
+		df['ret3'] = (df1.open - df1.preClose) / df1.open
+		df['ret4'] = df.ret1 - df.ret3
+		df['ret5'] = (df1.midPx - df1.high) / df1.midPx
+		df['ret6'] = (df1.midPx - df1.low) / df1.midPx
+		df['ret7'] = (df1.limitHigh - df1.midPx) / df1.midPx
+		
+		df['sprd_rat1'] = (df1.bidPx1 - df1.bidPx2) / df1.open
+		df['sprd_rat2'] = (df1.askPx2 - df1.askPx1) / df1.open
+		df['sprd_rat3'] = (df1.avgAskPx5 - df1.avgBidPx5) / df1.open
+		return df
 	
-	df = read_event_data1(date)
-	df.serverTime = time_to_milliseconds(df.serverTime)
-	df = pd.concat(list(map(get_section_feature_by_code, tqdm(df.groupby('code')))))
-	df = df.set_index(['code', 'bizIndex']).drop(['serverTime'], axis=1).replace([np.inf, -np.inf], np.nan)
-	makedirs(join(feature_path, date), exist_ok=True)
-	df.to_parquet(join(feature_path, date, 'feature_section.parquet'))
+	event = read_event_data1(date)
+	event.serverTime = time_to_milliseconds(event.serverTime)
+	feature = pd.concat(list(map(get_section_feature_by_code, tqdm(event.groupby('code')))))
+	feature = feature.reset_index().set_index(['code', 'bizIndex']).drop(['serverTime'], axis=1)
+	feature = feature.astype('float64').replace([np.inf, -np.inf], np.nan)
+	feature.to_parquet(join(feature_path, date, 'feature_section.parquet'))
 
 
 def get_series_feature():
@@ -199,6 +237,14 @@ def get_order_feature(date: str):
 
 
 if __name__ == '__main__':
-	# get_trans_feature('20250116')
-	# get_order_feature('20250116')
+	trading_dates = [
+		'20250102', '20250103', '20250106', '20250107', '20250108', '20250109', '20250110', '20250113', '20250114',
+		'20250115', '20250116', '20250117', '20250120', '20250121', '20250122', '20250123', '20250124', '20250127',
+		'20250205', '20250206', '20250207', '20250210', '20250211', '20250212', '20250213', '20250214', '20250217',
+		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
+	]
+	# perform_batch_task(get_section_feature, trading_dates, n_worker=6)
+	# perform_batch_task(get_trans_feature, trading_dates, n_worker=6)
+	# perform_batch_task(get_order_feature, trading_dates, n_worker=6)
 	date = '20250116'
+	code = '000001.SZ'
