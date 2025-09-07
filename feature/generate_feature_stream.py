@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from os.path import join
 from paths.paths import event_data_path, feature_path, stock_resample_path, stock_split_data_path
-from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds
+from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds, timefn
 from research_utils import get_quote_additional_columns
 
 
@@ -95,11 +95,15 @@ def get_section_feature(date: str):
 	feature.to_parquet(join(feature_path, date, 'feature_section.parquet'))
 
 
-def get_series_feature(date: str):
+@timefn
+def get_series_indus_feature(date: str):
+	def slice(feature: pd.DataFrame):
+		feature = feature.T.stack(future_stack=True).loc[df.index]
+		return feature
+	
 	columns = [
-		'code', 'bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow',
-		'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3', 'bidPx4',
-		'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2',
+		'code', 'bizIndex', 'preClose', 'high', 'low', 'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3',
+		'bidPx4', 'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10', 'bidVol1', 'bidVol2',
 		'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6', 'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10',
 		'bidNum1', 'bidNum2', 'bidNum3', 'bidNum4', 'bidNum5', 'bidNum6', 'bidNum7', 'bidNum8',
 		'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5', 'askPx6',
@@ -109,38 +113,99 @@ def get_series_feature(date: str):
 		'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum', 'totalAskNum',
 	]
 	df1 = pd.read_parquet(join(stock_resample_path, date, 'quote.parquet'), columns=columns)
-	# df1 = get_quote_additional_columns(df1)
-	
-	aa = ['bizIndex', 'preClose', 'open', 'high', 'low', 'limitHigh', 'limitLow',
-       'cumVolume', 'cumAmount', 'cumNumber', 'bidPx1', 'bidPx2', 'bidPx3',
-       'bidPx4', 'bidPx5', 'bidPx6', 'bidPx7', 'bidPx8', 'bidPx9', 'bidPx10',
-       'bidVol1', 'bidVol2', 'bidVol3', 'bidVol4', 'bidVol5', 'bidVol6',
-       'bidVol7', 'bidVol8', 'bidVol9', 'bidVol10', 'bidNum1', 'bidNum2',
-       'bidNum3', 'bidNum4', 'bidNum5', 'bidNum6', 'bidNum7', 'bidNum8',
-       'bidNum9', 'bidNum10', 'askPx1', 'askPx2', 'askPx3', 'askPx4', 'askPx5',
-       'askPx6', 'askPx7', 'askPx8', 'askPx9', 'askPx10', 'askVol1', 'askVol2',
-       'askVol3', 'askVol4', 'askVol5', 'askVol6', 'askVol7', 'askVol8',
-       'askVol9', 'askVol10', 'askNum1', 'askNum2', 'askNum3', 'askNum4',
-       'askNum5', 'askNum6', 'askNum7', 'askNum8', 'askNum9', 'askNum10',
-       'avgBidPx', 'avgAskPx', 'totalBidVol', 'totalAskVol', 'totalBidNum',
-       'totalAskNum', 'totalBidVol5', 'totalAskVol5', 'totalBidNum5',
-       'totalAskNum5', 'totalBidVol10', 'totalAskVol10', 'totalBidNum10',
-       'totalAskNum10', 'avgBidPx5', 'avgAskPx5', 'avgBidPx10', 'avgAskPx10',
-       'volume', 'amount', 'number', 'midPx']
-	
-	df2 = df1[['bidVol1', 'askVol1', 'totalBidVol', 'totalAskVol', 'midPx']].unstack(level=0)
-	
-	x3 = df2['bidVol1'].rolling(200, min_periods=1).sum()
-	x4 = df2['askVol1'].rolling(200, min_periods=1).sum()
-	((x3 - x4) / (x3 + x4)).rolling(200, min_periods=1).sum().T.stack(future_stack=True)
+	df1 = get_quote_additional_columns(df1)
+	df1['amount1'] = np.nan
+	df1['amount10'] = np.nan
+	df2 = df1[['preClose', 'high', 'low', 'cumVolume', 'cumAmount', 'bidPx1', 'bidVol1', 'askPx1', 'askVol1', 'totalBidVol', 'totalAskVol',
+	           'avgBidPx5', 'avgAskPx5', 'avgBidPx10', 'avgAskPx10', 'volume', 'amount', 'midPx', 'amount1', 'amount10']].unstack(level=0)
 	
 	df = read_event_data1(date)
-	df.serverTime = time_to_milliseconds(df.serverTime)
-	return
-
-
-def get_indus_feature():
-	return
+	df = df.set_index(['code', 'datetime'])
+	
+	x3 = df2.bidVol1.rolling(200, min_periods=1).sum()
+	x4 = df2.askVol1.rolling(200, min_periods=1).sum()
+	df['imb16'] = slice(((x3 - x4) / (x3 + x4)).rolling(200, min_periods=1).sum())
+	x5 = df2.totalBidVol.rolling(200, min_periods=1).sum()
+	x6 = df2.totalAskVol.rolling(200, min_periods=1).sum()
+	df['imb17'] = slice(((x5 - x6) / (x5 + x6)).rolling(200, min_periods=1).sum())
+	
+	df['ret8'] = slice(1 - df2.midPx.shift(20).bfill() / df2.midPx)
+	df['ret9'] = slice(1 - df2.midPx.shift(100).bfill() / df2.midPx)
+	df['ret10'] = slice(1 - df2.midPx.shift(600).bfill() / df2.midPx)
+	df['ret11'] = slice((df2.midPx / df2.preClose - 1).rolling(100, min_periods=1).mean())
+	
+	ret = 1 - df2.midPx.shift(1).bfill() / df2.midPx
+	df['rv1'] = slice((ret ** 2).rolling(20, min_periods=1).sum())
+	df['rv2'] = slice((ret ** 2).rolling(100, min_periods=1).sum())
+	df['rv3'] = slice((df2.high - df2.low) / df2.midPx)
+	
+	ret_abs = ret.abs()
+	df['trend1'] = df.ret8 / slice(ret_abs.rolling(20, min_periods=1).sum())
+	df['trend2'] = df.ret9 / slice(ret_abs.rolling(100, min_periods=1).sum())
+	df['trend3'] = df.ret10 / slice(ret_abs.rolling(600, min_periods=1).sum())
+	
+	df['trend4'] = slice((df2.totalBidVol + df2.totalAskVol).diff().rolling(100, min_periods=1).mean() / np.sqrt(df2.amount10))
+	df['trend5'] = slice((df2.totalBidVol + df2.totalAskVol).diff().rolling(200, min_periods=1).mean() / np.sqrt(df2.amount10))
+	df['trend6'] = slice((df2.avgBidPx5.pct_change(fill_method=None) + df2.avgAskPx5.pct_change(fill_method=None)).rolling(100, min_periods=1).mean())
+	
+	spread1 = df2.askPx1 - df2.bidPx1
+	spread4 = df2.avgAskPx5 - df2.avgBidPx5
+	df['sprd_std1'] = slice(spread1.rolling(20, min_periods=1).std())
+	df['sprd_std2'] = slice(spread1.rolling(100, min_periods=1).std())
+	df['sprd_std3'] = slice(spread4.rolling(100, min_periods=1).std())
+	
+	midPx1 = df2.midPx.rolling(20, min_periods=1)
+	midPx2 = df2.midPx.rolling(100, min_periods=1)
+	df['pv1'] = slice(np.sqrt(np.log(midPx1.max() - midPx1.min() + 1) ** 2 / 4 / np.log(2)))
+	df['pv2'] = slice(np.sqrt(np.log(midPx2.max() - midPx2.min() + 1) ** 2 / 4 / np.log(2)))
+	
+	volume1 = df2.volume.rolling(20, min_periods=1).sum()
+	volume2 = df2.volume.rolling(100, min_periods=1).sum()
+	volume3 = df2.volume.rolling(600, min_periods=1).sum()
+	amount1 = df2.amount.rolling(20, min_periods=1).sum()
+	amount2 = df2.amount.rolling(100, min_periods=1).sum()
+	amount3 = df2.amount.rolling(600, min_periods=1).sum()
+	avgpx1 = amount1 / volume1
+	avgpx2 = amount2 / volume2
+	avgpx3 = amount3 / volume3
+	avgpx4 = df2.cumAmount / df2.cumVolume
+	
+	df['amt_rat1'] = slice(amount1 / amount2)
+	df['amt_rat2'] = slice(amount2 / amount3)
+	
+	df['mid2avg1'] = slice(1 - avgpx1 / df2.midPx)
+	df['mid2avg2'] = slice(1 - avgpx2 / df2.midPx)
+	df['mid2avg3'] = slice(1 - avgpx3 / df2.midPx)
+	df['mid2avg4'] = slice(1 - avgpx4 / df2.midPx)
+	df['mid2avg5'] = slice(df2.midPx.rolling(20, min_periods=1).mean() / avgpx1 - 1)
+	df['mid2avg6'] = slice(df2.midPx.rolling(100, min_periods=1).mean() / avgpx2 - 1)
+	df['mid2avg7'] = slice(df2.midPx.rolling(600, min_periods=1).mean() / avgpx3 - 1)
+	
+	df['mid2high1'] = slice(df2.midPx.rolling(20, min_periods=1).max() / df2.high - 1)
+	df['mid2low1'] = slice(df2.midPx / df2.midPx.rolling(200, min_periods=1).min() - 1)
+	
+	df['avg_ret1'] = slice(1 - avgpx4.shift(20).bfill() / avgpx4)
+	df['avg_ret2'] = slice(1 - avgpx4.shift(100).bfill() / avgpx4)
+	df['avg_ret3'] = slice(1 - avgpx4.shift(600).bfill() / avgpx4)
+	
+	df['avg_amt1'] = slice(df2.amount.rolling(20, min_periods=1).mean() / np.sqrt(df2.amount1))
+	df['avg_amt2'] = slice(df2.amount.rolling(100, min_periods=1).mean() / np.sqrt(df2.amount1))
+	df['avg_amt3'] = slice(df2.amount.rolling(20, min_periods=1).mean() / np.sqrt(df2.amount10))
+	df['avg_amt4'] = slice(df2.amount.rolling(100, min_periods=1).mean() / np.sqrt(df2.amount10))
+	df['avg_amt5'] = slice(df2.amount.rolling(600, min_periods=1).mean() / np.sqrt(df2.amount10))
+	
+	df['corr1'] = slice(df2.totalBidVol.rolling(20, min_periods=1).corr(df2.totalAskVol))
+	df['corr2'] = slice(df2.totalBidVol.rolling(100, min_periods=1).corr(df2.totalAskVol))
+	df['corr3'] = slice(df2.totalBidVol.rolling(600, min_periods=1).corr(df2.totalAskVol))
+	df['corr4'] = slice(df2.bidPx1.rolling(200, min_periods=1).corr(df2.askPx1))
+	df['corr5'] = slice(df2.bidVol1.rolling(200, min_periods=1).corr(df2.askVol1))
+	df['corr6'] = slice(df2.avgBidPx5.rolling(200, min_periods=1).corr(df2.avgAskPx5))
+	df['corr7'] = slice(df2.avgBidPx10.rolling(200, min_periods=1).corr(df2.avgAskPx10))
+	
+	df = df.reset_index().set_index(['code', 'bizIndex']).drop(['serverTime', 'datetime'], axis=1)
+	df = df.astype('float64').replace([np.inf, -np.inf], np.nan)
+	# df.to_parquet(join(feature_path, date, 'feature_series_indus.parquet'))
+	return df
 
 
 def division(a: float, b: float):
@@ -280,6 +345,13 @@ def get_order_feature(date: str):
 	df.to_parquet(join(feature_path, date, 'feature_order.parquet'))
 
 
+def generate_feature_stream(date: str):
+	get_section_feature(date)
+	get_series_indus_feature(date)
+	get_trans_feature(date)
+	get_order_feature(date)
+	
+	
 if __name__ == '__main__':
 	trading_dates = [
 		'20250102', '20250103', '20250106', '20250107', '20250108', '20250109', '20250110', '20250113', '20250114',
@@ -287,7 +359,6 @@ if __name__ == '__main__':
 		'20250205', '20250206', '20250207', '20250210', '20250211', '20250212', '20250213', '20250214', '20250217',
 		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
 	]
-	# perform_batch_task(get_section_feature, trading_dates, n_worker=6)
-	# perform_batch_task(get_trans_feature, trading_dates, n_worker=6)
-	# perform_batch_task(get_order_feature, trading_dates, n_worker=6)
+	# perform_batch_task(generate_feature_stream, trading_dates, n_worker=6)
 	date = '20250116'
+	df = get_series_indus_feature(date)
