@@ -22,8 +22,8 @@ def get_order_book(df1: pd.DataFrame, df2: pd.DataFrame):
 	df = volume1[volume1.volume.ne(0)].unstack(level=1, fill_value=0).sort_index().reset_index()
 	df.columns = ['code', 'price', 'bid_volume', 'ask_volume', 'bid_number', 'ask_number']
 	return df
-	
-	
+
+
 def get_open_price(order: pd.DataFrame, cancel: pd.DataFrame, preclose: Dict):
 	def get_open_price_by(time: int):
 		df = get_order_book(order[order.time.lt(time)], cancel[cancel.time.lt(time)])
