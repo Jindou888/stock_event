@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from os.path import join
 from paths.paths import clean_data_path, event_data_path, feature_path, stock_resample_path, stock_split_data_path
-from common_utils import milliseconds_to_time, perform_batch_task, time_to_milliseconds, timefn
+from common_utils import perform_batch_task, time_to_milliseconds, timefn
 from research_utils import get_quote_additional_columns
 
 
@@ -20,6 +20,7 @@ def read_event_data1(date: str):
 	return df
 
 
+@timefn
 def get_section_feature(date: str):
 	def get_section_feature_by_code(t):
 		code, df = t
@@ -299,7 +300,6 @@ def get_series_indus_feature(date: str):
 	df = df.reset_index().set_index(['code', 'bizIndex']).drop(['serverTime', 'datetime'], axis=1)
 	df = df.astype('float64').replace([np.inf, -np.inf], np.nan)
 	df.to_parquet(join(feature_path, date, 'feature_series_indus.parquet'))
-	return df
 
 
 def division(a: float, b: float):
@@ -310,6 +310,7 @@ def division(a: float, b: float):
 	return result
 
 
+@timefn
 def get_trans_feature(date: str):
 	def get_trans_feature_by_code(t):
 		code, event = t
@@ -350,6 +351,7 @@ def get_trans_feature(date: str):
 	df.to_parquet(join(feature_path, date, 'feature_trans.parquet'))
 
 
+@timefn
 def get_order_feature(date: str):
 	def get_order_feature_by_code(t):
 		code, event = t
@@ -453,5 +455,4 @@ if __name__ == '__main__':
 		'20250205', '20250206', '20250207', '20250210', '20250211', '20250212', '20250213', '20250214', '20250217',
 		'20250218', '20250219', '20250220', '20250221', '20250224', '20250225', '20250226', '20250227', '20250228',
 	]
-	# perform_batch_task(generate_feature_stream, trading_dates, n_worker=6)
-	date = '20250116'
+	perform_batch_task(generate_feature_stream, trading_dates, n_worker=6)
