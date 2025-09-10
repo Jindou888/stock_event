@@ -94,8 +94,8 @@ def get_auction_feature(date: str):
 	df1['unmatch_vol'] = df1.bid_cum_volume - df1.ask_cum_volume
 	df1['match_vol_pct'] = group.match_volume.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0)
 	df1['match_volume_prop'] = df1.match_volume / df1.code.map(group.match_volume.sum())
-	df1['ret'] = group.price.pct_change(fill_method=None).fillna(0) * 1e4  #
-	df1['ret2pre'] = (df1.price / df1.preclose - 1) * 1e4 #
+	df1['ret'] = group.price.pct_change(fill_method=None).fillna(0)
+	df1['ret2pre'] = (df1.price / df1.preclose - 1)
 	
 	df = pd.DataFrame(index=preclose.keys(), dtype='float64')
 	bid_number = group.bid_order_number.sum() - group.bid_cancel_number.sum()
